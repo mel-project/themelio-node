@@ -3,7 +3,7 @@
 [![](https://img.shields.io/crates/v/melnode)](https://crates.io/crates/melode)
 ![](https://img.shields.io/crates/l/melnode)
 
-[Mel](https://themelio.org) is a new public blockchain focused on security, performance, and long-term stability. `melnode` is Mel's reference implementation in Rust.
+[Mel](https://melproject.org) is a new public blockchain focused on security, performance, and long-term stability. `melnode` is Mel's reference implementation in Rust.
 
 ## Installation
 
