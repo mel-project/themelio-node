@@ -11,6 +11,7 @@ use std::{
 };
 
 /// Attempts a sync using the given given node client.
+#[tracing::instrument(skip(client, storage))]
 pub async fn attempt_blksync(
     addr: SocketAddr,
     client: &NodeRpcClient,
@@ -40,14 +41,14 @@ pub async fn attempt_blksync(
     while height <= their_highest {
         let start = Instant::now();
 
-        log::debug!("gonna get compressed blocks from {addr}...");
+        tracing::debug!("gonna get compressed blocks from {addr}...");
         let compressed_blocks = client
             .get_lz4_blocks(height, 500_000)
             .timeout(Duration::from_secs(30))
             .await
             .context("timeout while getting compressed blocks")?
             .context("failed to get compressed blocks")?;
-        log::debug!("got compressed blocks!");
+        tracing::debug!("got compressed blocks!");
 
         let (blocks, cproofs): (Vec<Block>, Vec<ConsensusProof>) = match compressed_blocks {
             Some(compressed) => {
@@ -64,7 +65,7 @@ pub async fn attempt_blksync(
         };
 
         let mut last_applied_height = height;
-        log::info!(
+        tracing::info!(
             "fully resolved blocks {}..{} from peer {} in {:.2}ms",
             blocks.first().map(|b| b.header.height).unwrap_or_default(),
             blocks.last().map(|b| b.header.height).unwrap_or_default(),
@@ -93,6 +94,7 @@ pub async fn attempt_blksync(
 }
 
 /// Attempts a sync using the given given node client, in a legacy fashion.
+#[tracing::instrument(skip(client, storage))]
 pub async fn attempt_blksync_legacy(
     addr: SocketAddr,
     client: &NodeRpcClient,
@@ -137,7 +139,7 @@ pub async fn attempt_blksync_legacy(
                 if block.header.height != height {
                     anyhow::bail!("WANTED BLK {}, got {}", height, block.header.height);
                 }
-                log::trace!(
+                tracing::trace!(
                     "fully resolved block {} from peer {} in {:.2}ms",
                     block.header.height,
                     addr,

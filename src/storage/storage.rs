@@ -61,14 +61,17 @@ impl Storage {
     }
 
     /// Opens a NodeStorage, given a meshanina and boringdb database.
+    #[tracing::instrument]
     pub async fn open(mut db_folder: PathBuf, genesis: GenesisConfig) -> anyhow::Result<Self> {
         let genesis_id = tmelcrypt::hash_single(stdcode::serialize(&genesis).unwrap());
         db_folder.push(format!("{}/", hex::encode(genesis_id.0)));
         std::fs::create_dir_all(&db_folder).context("cannot make folder")?;
         let sqlite_path = db_folder.clone().tap_mut(|path| path.push("storage.db"));
         let mesha_path = db_folder.clone().tap_mut(|path| path.push("merkle.db"));
-        log::debug!("about to sqlite");
-        let conn = rusqlite::Connection::open(&sqlite_path).context("cannot make sqlite")?;
+
+        tracing::debug!(path = debug(&sqlite_path), "about to initialize sqlite");
+        let conn =
+            rusqlite::Connection::open(&sqlite_path).context("failed to open sqlite connection")?;
         conn.execute("create table if not exists history (height primary key not null, header not null, block not null)", params![])?;
         conn.execute("create table if not exists consensus_proofs (height primary key not null, proof not null)", params![])?;
         conn.execute(
@@ -80,7 +83,7 @@ impl Storage {
             params![],
         )?;
 
-        log::debug!("sqlite initted");
+        tracing::debug!(path = debug(&sqlite_path), "sqlite initialized");
 
         // initialize the stakes
         for (txhash, stake) in genesis.stakes.iter() {
@@ -98,9 +101,9 @@ impl Storage {
             send_pool.send(conn).await.unwrap();
         }
 
-        log::debug!("about to mesha");
+        tracing::debug!(path = debug(&mesha_path), "about to initialize meshanina");
         let forest = novasmt::Database::new(MeshaCas::new(
-            meshanina::Mapping::open(&mesha_path).context("cannot open mesha")?,
+            meshanina::Mapping::open(&mesha_path).context("cannot open meshanina")?,
         ));
         let mempool = Arc::new(Mempool::new(genesis.clone().realize(&forest)).into());
         Ok(Self {
@@ -121,10 +124,12 @@ impl Storage {
 
     /// Obtain the highest state.
     pub async fn highest_state(&self) -> SealedState<MeshaCas> {
-        // TODO this may be a bit stale
+        // TODO: this may be a bit stale
         let height = self.highest_height().await;
         if height.0 > 0 {
-            self.get_state(height).await.expect("highest not available")
+            self.get_state(height)
+                .await
+                .expect("highest state not available")
         } else {
             self.genesis.clone().realize(self.forest()).seal(None)
         }
@@ -258,12 +263,16 @@ impl Storage {
         .await
     }
 
+    #[tracing::instrument(skip(self, cproof))]
     /// Consumes a block, applying it to the current state.
     pub async fn apply_block(&self, blk: Block, cproof: ConsensusProof) -> anyhow::Result<()> {
         let _guard = self.lock.lock().await;
+
+        // TODO: document why this is special
         if blk.header.height.0 == 531 {
-            eprintln!("APPLY BLOCK: {:#?}", blk);
+            tracing::warn!("applying block 531: {:#?}", blk);
         }
+
         let highest_state = self.highest_state().await;
         let header = blk.header;
         if header.height != highest_state.header().height + 1.into() {
@@ -327,7 +336,7 @@ impl Storage {
                 for txn in blk.transactions {
                     if txn.kind == TxKind::Stake {
                         if let Ok(doc) = stdcode::deserialize::<StakeDoc>(&txn.data) {
-                            // TODO BUG BUG this poorly replicates the validation logic. Make a method SealedState::new_stakes()
+                            // TODO: this poorly replicates the validation logic. Make a method SealedState::new_stakes()
                             if blk.header.height.0 >= 500000 || blk.header.network != NetID::Mainnet {
                             conn.execute("insert into stakes (txhash, height, stake_doc) values ($1, $2, $3)", params![txn.hash_nosigs().to_string(), blk.header.height.0, doc.stdcode()])?;
                             }
@@ -339,7 +348,7 @@ impl Storage {
             })
             .await?
         }
-        log::debug!(
+        tracing::debug!(
             "applied block {} / {} in {:.2}ms (history insertion {:.2}ms)",
             new_state.header().height,
             new_state.header().hash(),
