@@ -89,6 +89,6 @@ fn main_create(create: CreateArgs) -> anyhow::Result<()> {
     }
     writeln!(&mut run_all_script, "wait")?;
     std::fs::write("run-all.sh", run_all_script.as_bytes())?;
-    std::fs::write("genesis.yaml", &serde_yaml::to_vec(&genesis_config)?)?;
+    std::fs::write("genesis.yaml", serde_yaml::to_vec(&genesis_config)?)?;
     Ok(())
 }

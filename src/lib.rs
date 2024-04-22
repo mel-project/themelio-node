@@ -5,3 +5,5 @@ pub mod node;
 pub mod autoretry;
 pub mod staker;
 pub mod storage;
+
+pub mod telemetry;

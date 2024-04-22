@@ -204,8 +204,7 @@ async fn network_task_inner(storage: Storage, cfg: StakerConfig) -> anyhow::Resu
                 };
                 loop {
                     if let Some(result) = get_proof() {
-                        let cproof: ConsensusProof =
-                            result.clone().into_iter().map(|(k, v)| (k, v)).collect();
+                        let cproof: ConsensusProof = result.clone().into_iter().collect();
                         if let Err(err) = storage.apply_block(decision.clone(), cproof).await {
                             log::error!("cannot commit newly decided block: {:?}", err)
                         }

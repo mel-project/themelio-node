@@ -41,17 +41,18 @@ pub struct Node {
 
 impl Node {
     /// Creates a new Node.
+    ///
+    #[tracing::instrument(skip(swarm, storage))]
     pub async fn start(
         netid: NetID,
         listen_addr: SocketAddr,
-
         advertise_addr: Option<SocketAddr>,
         storage: Storage,
         index_coins: bool,
         swarm: Swarm<HttpBackhaul, NodeRpcClient>,
     ) -> anyhow::Result<Self> {
         // This is all we need to do since start_listen does not block.
-        log::debug!("starting to listen at {}", listen_addr);
+        tracing::debug!(listen_addr = debug(listen_addr), "melnode listening");
         swarm
             .start_listen(
                 listen_addr.to_string().into(),
@@ -74,13 +75,14 @@ impl Node {
     }
 }
 
+#[tracing::instrument(skip(swarm, storage))]
 async fn blksync_loop(_netid: NetID, swarm: Swarm<HttpBackhaul, NodeRpcClient>, storage: Storage) {
     loop {
         let gap_time: Duration = Duration::from_secs_f64(fastrand::f64() * 1.0);
         let routes = swarm.routes().await;
         let random_peer = routes.first().cloned();
         if let Some(peer) = random_peer {
-            log::trace!("picking peer {} out of {} peers", &peer, routes.len());
+            tracing::trace!("picking peer {} out of {} peers", &peer, routes.len());
             let fallible_part = async {
                 let client = swarm.connect(peer.clone()).await?;
                 let addr: SocketAddr = peer.clone().to_string().parse()?;
@@ -89,12 +91,12 @@ async fn blksync_loop(_netid: NetID, swarm: Swarm<HttpBackhaul, NodeRpcClient>, 
             };
             match fallible_part.await {
                 Err(e) => {
-                    log::warn!("failed to blksync with {}: {:?}", peer, e);
-                    log::warn!("last state: {:?}", storage.highest_state().await.header());
+                    tracing::warn!("failed to blksync with {}: {:?}", peer, e);
+                    tracing::warn!("last state: {:?}", storage.highest_state().await.header());
                 }
                 Ok(blklen) => {
                     if blklen > 0 {
-                        log::debug!("synced to height {:?}", storage.highest_height().await);
+                        tracing::debug!("synced to height {:?}", storage.highest_height().await);
                     }
                 }
             }
@@ -140,9 +142,16 @@ impl NodeRpcImpl {
         })
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_coin_tree(&self, height: BlockHeight) -> anyhow::Result<Tree<InMemoryCas>> {
+        let now = Instant::now();
+
         let otree = self.coin_smts.lock().get(&height).cloned();
         if let Some(v) = otree {
+            tracing::debug!(
+                elapsed = debug(now.elapsed()),
+                "get_coin_tree (cached) time taken"
+            );
             Ok(v)
         } else {
             let state = self
@@ -161,6 +170,8 @@ impl NodeRpcImpl {
                 mm.insert(tx.hash_nosigs(), tx.clone());
             }
             self.coin_smts.lock().put(height, mm.mapping.clone());
+
+            tracing::debug!(elapsed = debug(now.elapsed()), "get_coin_tree time taken");
             Ok(mm.mapping)
         }
     }
@@ -170,7 +181,7 @@ impl NodeRpcImpl {
             let indexer = indexer.inner();
             let height = self.storage.highest_height().await;
             while indexer.max_height() < height {
-                log::warn!("waiting for {height} to be available at the indexer...");
+                tracing::warn!("waiting for {height} to be available at the indexer...");
                 smol::Timer::after(Duration::from_secs(1)).await;
             }
             Some(indexer)
@@ -185,6 +196,7 @@ static TCP_BACKHAUL: Lazy<HttpBackhaul> = Lazy::new(HttpBackhaul::new);
 
 #[async_trait]
 impl NodeRpcProtocol for NodeRpcImpl {
+    #[tracing::instrument(skip(self, tx))]
     async fn send_tx(&self, tx: Transaction) -> Result<(), TransactionError> {
         if let Some(val) = self.recent.lock().peek(&tx.hash_nosigs()) {
             if val.elapsed().as_secs_f64() < 10.0 {
@@ -192,7 +204,7 @@ impl NodeRpcProtocol for NodeRpcImpl {
             }
         }
         self.recent.lock().put(tx.hash_nosigs(), Instant::now());
-        log::trace!("handling send_tx");
+        tracing::debug!("handling send_tx");
         let start = Instant::now();
 
         self.storage
@@ -200,12 +212,12 @@ impl NodeRpcProtocol for NodeRpcImpl {
             .apply_transaction(&tx)
             .map_err(|e| {
                 if !e.to_string().contains("duplicate") {
-                    log::warn!("cannot apply tx: {:?}", e)
+                    tracing::warn!("cannot apply tx: {:?}", e)
                 }
                 TransactionError::Invalid(e.to_string())
             })?;
 
-        log::debug!(
+        tracing::debug!(
             "txhash {}.. inserted ({:?} applying)",
             &tx.hash_nosigs().to_string()[..10],
             start.elapsed(),
@@ -213,7 +225,7 @@ impl NodeRpcProtocol for NodeRpcImpl {
 
         let routes = self.swarm.routes().await;
         for neigh in routes.iter().take(16).cloned() {
-            log::debug!("about to broadcast txhash {} to {neigh}", tx.hash_nosigs());
+            tracing::debug!("about to broadcast txhash {} to {neigh}", tx.hash_nosigs());
             let tx = tx.clone();
             smolscale::spawn(async move {
                 let conn = TCP_BACKHAUL.connect(neigh).await?;
@@ -230,24 +242,35 @@ impl NodeRpcProtocol for NodeRpcImpl {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_abbr_block(&self, height: BlockHeight) -> Option<(AbbrBlock, ConsensusProof)> {
+        let now = Instant::now();
+
         if let Some(c) = self.abbr_block_cache.get(&height) {
             return Some(c);
         }
-        log::trace!("handling get_abbr_block({})", height);
+        tracing::trace!("handling get_abbr_block({})", height);
         let block = self.storage.get_block(height).await?;
         let proof = self.storage.get_consensus(height).await?;
         let summ = (block.abbreviate(), proof);
         self.abbr_block_cache.insert(height, summ.clone());
+
+        tracing::debug!(time = debug(now.elapsed()), "get_abbr_block time taken");
         Some(summ)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_summary(&self) -> StateSummary {
-        log::trace!("handling get_summary()");
+        let now = Instant::now();
+
         let highest = self.storage.highest_state().await;
         let header = highest.header();
         let res = self.summary.lock().get(&header.height).cloned();
         if let Some(res) = res {
+            tracing::debug!(
+                time = debug(now.elapsed()),
+                "get_summary (cached) time taken"
+            );
             res
         } else {
             let proof = self
@@ -262,17 +285,21 @@ impl NodeRpcProtocol for NodeRpcImpl {
                 proof,
             };
             self.summary.lock().push(header.height, summary.clone());
+
+            tracing::debug!(time = debug(now.elapsed()), "get_summary time taken");
             summary
         }
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_block(&self, height: BlockHeight) -> Option<Block> {
-        log::trace!("handling get_state({})", height);
         self.storage.get_block(height).await
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_lz4_blocks(&self, height: BlockHeight, size_limit: usize) -> Option<String> {
-        log::debug!("get_lz4_blocks({height}, {size_limit})");
+        let now = Instant::now();
+
         let size_limit = size_limit.min(10_000_000);
         // TODO: limit the *compressed* size. But this is fine because compression makes stuff smoller
         let mut total_count = 0;
@@ -291,7 +318,7 @@ impl NodeRpcProtocol for NodeRpcImpl {
                         proof_accum.push(proof);
 
                         if total_count > size_limit {
-                            log::info!("BATCH IS DONE");
+                            tracing::info!("BATCH IS DONE");
                             if accum.len() > 1 {
                                 accum.pop();
                             }
@@ -300,11 +327,11 @@ impl NodeRpcProtocol for NodeRpcImpl {
                         height += BlockHeight(1);
                     }
                     _ => {
-                        log::warn!("no proof stored for height {}", height);
+                        tracing::warn!("no proof stored for height {}", height);
                     }
                 }
             } else if accum.is_empty() {
-                log::warn!("no stored block for height: {:?}", height);
+                tracing::warn!("no stored block for height: {:?}", height);
                 return None;
             } else {
                 break;
@@ -312,16 +339,20 @@ impl NodeRpcProtocol for NodeRpcImpl {
         }
 
         let compressed = lz4_flex::compress_prepend_size(&(accum, proof_accum).stdcode());
-        Some(base64::engine::general_purpose::STANDARD_NO_PAD.encode(compressed))
+        let encoded = Some(base64::engine::general_purpose::STANDARD_NO_PAD.encode(compressed));
+
+        tracing::debug!(time = debug(now.elapsed()), "get_lz4_blocks time taken");
+        encoded
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_smt_branch(
         &self,
         height: BlockHeight,
         elem: Substate,
         key: HashVal,
     ) -> Option<(Vec<u8>, CompressedProof)> {
-        log::trace!("handling get_smt_branch({}, {:?})", height, elem);
+        let now = Instant::now();
         let state = self.storage.get_state(height).await?;
         let ctree = self.get_coin_tree(height).await.ok()?;
         let coins_smt = state.raw_coins_smt();
@@ -335,22 +366,32 @@ impl NodeRpcProtocol for NodeRpcImpl {
             Substate::Stakes => todo!("no longer relevant"),
             Substate::Transactions => ctree.get_with_proof(key.0),
         };
-        Some((v.to_vec(), proof.compress()))
+        let branch = Some((v.to_vec(), proof.compress()));
+
+        tracing::debug!(time = debug(now.elapsed()), "get_smt_branch time taken");
+        branch
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_stakers_raw(&self, height: BlockHeight) -> Option<BTreeMap<HashVal, Vec<u8>>> {
+        let now = Instant::now();
         let state = self.storage.get_state(height).await?;
         // Note, the returned HashVal is >> HASHED AGAIN << because this is supposed to be compatible with the old SmtMapping encoding, where the key to the `stakes` SMT is the *hash of the transaction hash* due to a quirk.
-        Some(
+        let stakers = Some(
             state
                 .raw_stakes()
                 .iter()
                 .map(|(k, v)| (k.0.hash(), v.stdcode()))
                 .collect(),
-        )
+        );
+
+        tracing::debug!(time = debug(now.elapsed()), "get_stakers_raw time taken");
+        stakers
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_some_coins(&self, height: BlockHeight, covhash: Address) -> Option<Vec<CoinID>> {
+        let now = Instant::now();
         let indexer = self.get_indexer().await?;
         let coins: Vec<CoinID> = indexer
             .query_coins()
@@ -362,15 +403,18 @@ impl NodeRpcProtocol for NodeRpcImpl {
                 index: c.create_index,
             })
             .collect();
+        tracing::debug!(time = debug(now.elapsed()), "get_some_coins time taken");
         Some(coins)
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_coin_changes(
         &self,
         height: BlockHeight,
         covhash: Address,
     ) -> Option<Vec<CoinChange>> {
-        log::debug!("get_coin_changes({height}, {covhash})");
+        let now = Instant::now();
+
         self.storage.get_block(height).await?;
         let indexer = self.get_indexer().await?;
         // get coins 1 block below the given height
@@ -390,7 +434,7 @@ impl NodeRpcProtocol for NodeRpcImpl {
             .collect();
 
         if !added_coins.is_empty() || !deleted_coins.is_empty() {
-            log::debug!(
+            tracing::debug!(
                 "{} added, {} deleted",
                 added_coins.len(),
                 deleted_coins.len()
@@ -414,12 +458,15 @@ impl NodeRpcProtocol for NodeRpcImpl {
             })
             .collect();
 
+        tracing::debug!(time = debug(now.elapsed()), "get_coin_changes time taken");
         Some([added, deleted].concat())
     }
 
+    #[tracing::instrument(skip(self))]
     async fn get_coin_spend(&self, coin: CoinID) -> Option<CoinSpendStatus> {
-        let indexer = self.get_indexer().await?;
+        let now = Instant::now();
 
+        let indexer = self.get_indexer().await?;
         let spend_info = indexer
             .query_coins()
             .create_txhash(coin.txhash)
@@ -427,12 +474,15 @@ impl NodeRpcProtocol for NodeRpcImpl {
             .iter()
             .next()?
             .spend_info;
-        match spend_info {
+        let status = match spend_info {
             Some(info) => Some(CoinSpendStatus::Spent((
                 info.spend_txhash,
                 info.spend_height,
             ))),
             None => Some(CoinSpendStatus::NotSpent),
-        }
+        };
+
+        tracing::debug!(time = debug(now.elapsed()), "get_coin_spend time taken");
+        status
     }
 }

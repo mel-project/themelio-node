@@ -1,4 +1,4 @@
-use melnode::{args::MainArgs, node::Node, staker::Staker, storage::Storage};
+use melnode::{args::MainArgs, node::Node, staker::Staker, storage::Storage, telemetry};
 
 use anyhow::Context;
 
@@ -16,9 +16,8 @@ fn main() -> anyhow::Result<()> {
         std::env::set_var("RUST_LOG", "melnode=debug,warn");
     }
 
-    let mut builder = env_logger::Builder::from_env("RUST_LOG");
+    telemetry::init_tracing();
 
-    builder.init();
     let opts = MainArgs::parse();
 
     smolscale::block_on(main_async(opts))
@@ -27,18 +26,22 @@ fn main() -> anyhow::Result<()> {
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// Runs the main function for a node.
+#[tracing::instrument(skip(opt))]
 pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
     #[cfg(feature = "dhat-heap")]
     let _profiler = dhat::Profiler::new_heap();
 
-    log::info!("melnode v{} initializing...", VERSION);
+    tracing::info!(version = debug(VERSION), "initializing melnode...",);
 
     let genesis = opt.genesis_config().await?;
     let netid = genesis.network;
     let storage: Storage = opt.storage().await?;
     let bootstrap = opt.bootstrap().await?;
 
-    log::info!("bootstrapping with {:?}", bootstrap);
+    tracing::info!(
+        bootstrap_addr = debug(bootstrap.clone()),
+        "bootstrapping..."
+    );
 
     let swarm: Swarm<HttpBackhaul, NodeRpcClient> =
         Swarm::new(HttpBackhaul::new(), NodeRpcClient, "melnode");
@@ -76,7 +79,7 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
         let snapshot = client.latest_snapshot().await.unwrap();
         smolscale::spawn::<anyhow::Result<()>>(async move {
             loop {
-                log::info!("*** SELF TEST STARTED! ***");
+                tracing::info!("*** SELF TEST STARTED! ***");
                 let mut state = storage
                     .get_state(BlockHeight(9))
                     .await
@@ -88,7 +91,7 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
                     let blk = storage.get_block(bh).await.context("no block")?;
                     state = state.apply_block(&blk).expect("block application failed");
                     smol::future::yield_now().await;
-                    log::debug!(
+                    tracing::debug!(
                         "{}/{} replayed correctly ({:.2}%)",
                         bh,
                         last_height,
@@ -106,7 +109,7 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
                                 .unwrap()
                                 .unwrap();
 
-                            log::debug!("testing transaction recipient {recipient}");
+                            tracing::debug!("testing transaction recipient {recipient}");
 
                             assert!(coin_changes
                                 .contains(&CoinChange::Add(CoinID::new(tx_0.hash_nosigs(), 0))));
@@ -120,7 +123,7 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
                                 .unwrap()
                                 .unwrap();
 
-                            log::debug!("testing proposer {reward_dest}");
+                            tracing::debug!("testing proposer {reward_dest}");
                             assert!(coin_changes
                                 .contains(&CoinChange::Add(CoinID::proposer_reward(bh))));
                         }

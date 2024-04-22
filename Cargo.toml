@@ -127,6 +127,8 @@ melstf = "0.12.3"
 tip911-stakeset = "0.0.2"
 melvm = "0.1.0"
 melprot = "0.13.4"
+tracing = "0.1.40"
+tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 #lz4_flex = "0.9.3"
 
 # [target.'cfg(unix)'.dependencies]
