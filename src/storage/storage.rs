@@ -266,6 +266,8 @@ impl Storage {
     #[tracing::instrument(skip(self, cproof))]
     /// Consumes a block, applying it to the current state.
     pub async fn apply_block(&self, blk: Block, cproof: ConsensusProof) -> anyhow::Result<()> {
+        let now = Instant::now();
+
         let _guard = self.lock.lock().await;
 
         // TODO: document why this is special
@@ -313,6 +315,10 @@ impl Storage {
         // we flush the merkle stuff first, because the sqlite points to merkle
         self.forest.storage().flush();
         let apply_time = start.elapsed();
+        tracing::trace!(
+            time = debug(apply_time.as_secs_f64() * 1000.0),
+            "apply_block to highest state in ms"
+        );
         let start = Instant::now();
 
         // now transactionally save to sqlite
@@ -348,16 +354,17 @@ impl Storage {
             })
             .await?
         }
-        tracing::debug!(
-            "applied block {} / {} in {:.2}ms (history insertion {:.2}ms)",
-            new_state.header().height,
-            new_state.header().hash(),
-            apply_time.as_secs_f64() * 1000.0,
-            start.elapsed().as_secs_f64() * 1000.0
-        );
         let next = self.highest_state().await;
         self.mempool_mut().rebase(next);
         self.new_block_notify.notify(usize::MAX);
+
+        tracing::trace!(
+            "applied block {} / {} in {:.2}ms (history insertion {:.2}ms)",
+            new_state.header().height,
+            new_state.header().hash(),
+            now.elapsed().as_secs_f64() * 1000.0,
+            start.elapsed().as_secs_f64() * 1000.0
+        );
 
         Ok(())
     }

@@ -13,18 +13,17 @@ pub struct Mempool {
     provisional_state: UnsealedState<MeshaCas>,
     last_rebase: UnsealedState<MeshaCas>,
     txx_in_state: HashSet<TxHash>,
-    next_weight: u128, // seen: LruCache<TxHash, ()>,
+    next_weight: u128,
 }
 
 impl Mempool {
-    /// Create sa new mempool based on a provisional state.
+    /// Creates a new mempool based on a provisional state.
     pub fn new(state: UnsealedState<MeshaCas>) -> Self {
         Self {
             provisional_state: state.clone(),
             last_rebase: state,
             txx_in_state: Default::default(),
             next_weight: 0,
-            // seen: LruCache::new(10000),
         }
     }
     /// Creates a State based on the present state of the mempool.
@@ -50,14 +49,14 @@ impl Mempool {
     /// Forcibly replaces the internal state of the mempool with the given state.
     pub fn rebase(&mut self, state: SealedState<MeshaCas>) {
         let current_sealed = self.provisional_state.clone().seal(None);
-        log::trace!(
+        tracing::trace!(
             "forcibly rebasing mempool {} => {}",
             current_sealed.header().height,
             state.header().height
         );
         if !current_sealed.is_empty() {
             let transactions = current_sealed.to_block().transactions;
-            log::warn!("*** THROWING AWAY {} MEMPOOL TXX ***", transactions.len());
+            tracing::warn!("*** THROWING AWAY {} MEMPOOL TXX ***", transactions.len());
         }
 
         let next_state = state.next_unsealed();

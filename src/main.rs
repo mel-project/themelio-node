@@ -7,10 +7,6 @@ use melnet2::{wire::http::HttpBackhaul, Swarm};
 use melprot::{Client, CoinChange, NodeRpcClient};
 use melstructs::{BlockHeight, CoinID};
 
-#[cfg(feature = "dhat-heap")]
-#[global_allocator]
-static ALLOC: dhat::Alloc = dhat::Alloc;
-
 fn main() -> anyhow::Result<()> {
     if std::env::var("RUST_LOG").is_err() {
         std::env::set_var("RUST_LOG", "melnode=debug,warn");
@@ -133,15 +129,6 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
         })
         .detach();
     }
-
-    // #[cfg(feature = "dhat-heap")]
-    // for i in 0..300 {
-    //     smol::Timer::after(Duration::from_secs(1)).await;
-    //     dbg!(i);
-    // }
-
-    #[cfg(not(feature = "dhat-heap"))]
-    let _: u64 = smol::future::pending().await;
 
     Ok(())
 }

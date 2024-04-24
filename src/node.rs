@@ -1,7 +1,7 @@
 mod blksync;
 mod indexer;
 
-use crate::{node::blksync::attempt_blksync, storage::Storage};
+use crate::{node::blksync::attempt_blksync, storage::Storage, telemetry};
 
 use anyhow::Context;
 use async_trait::async_trait;
@@ -271,6 +271,7 @@ impl NodeRpcProtocol for NodeRpcImpl {
                 time = debug(now.elapsed()),
                 "get_summary (cached) time taken"
             );
+            telemetry::emit_metric("get_summary_ms", now.elapsed().as_secs_f64() * 1000.0);
             res
         } else {
             let proof = self

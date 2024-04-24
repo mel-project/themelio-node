@@ -113,7 +113,7 @@ async fn network_task_inner(storage: Storage, cfg: StakerConfig) -> anyhow::Resu
         let next_height: BlockHeight = base_state.header().height + BlockHeight(1);
         let skip_round = async {
             storage.get_state_or_wait(next_height).await;
-            log::warn!("skipping consensus for {next_height} since we already got it");
+            tracing::warn!("skipping consensus for {next_height} since we already got it");
             anyhow::Ok(())
         };
         let next_time = height_to_time(base_state.header().network, next_height);
@@ -125,7 +125,7 @@ async fn network_task_inner(storage: Storage, cfg: StakerConfig) -> anyhow::Resu
             smol::Timer::after(Duration::from_millis(100)).await;
         }
 
-        log::debug!("starting consensus for {next_height}...");
+        tracing::debug!("starting consensus for {next_height}...");
         let consensus_start_time = Instant::now();
 
         let log_key = format!("{next_height}/{}", cfg.listen);
@@ -134,7 +134,7 @@ async fn network_task_inner(storage: Storage, cfg: StakerConfig) -> anyhow::Resu
             let proposed_state = storage.mempool().to_state();
             let sealed_proposed_state = proposed_state.clone().seal(None);
             if sealed_proposed_state.header().height != next_height {
-                log::warn!("mempool not at the right height, trying again");
+                tracing::warn!("mempool not at the right height, trying again");
                 storage.mempool_mut().rebase(base_state);
             } else {
                 let action = ProposerAction {
@@ -149,7 +149,7 @@ async fn network_task_inner(storage: Storage, cfg: StakerConfig) -> anyhow::Resu
                 };
                 // create the config
                 let proposed_state = proposed_state.seal(Some(action));
-                log::debug!(
+                tracing::debug!(
                     "proposed state has {} transactions",
                     proposed_state.to_block().transactions.len()
                 );
@@ -165,7 +165,7 @@ async fn network_task_inner(storage: Storage, cfg: StakerConfig) -> anyhow::Resu
                 };
                 let mut decider = streamlette::Decider::new(config);
                 let decision = decider.tick_to_end().await;
-                log::debug!(
+                tracing::debug!(
                     "{log_key} DECIDED on a block with {} bytes within {:?}",
                     decision.len(),
                     consensus_start_time.elapsed()
@@ -206,9 +206,9 @@ async fn network_task_inner(storage: Storage, cfg: StakerConfig) -> anyhow::Resu
                     if let Some(result) = get_proof() {
                         let cproof: ConsensusProof = result.clone().into_iter().collect();
                         if let Err(err) = storage.apply_block(decision.clone(), cproof).await {
-                            log::error!("cannot commit newly decided block: {:?}", err)
+                            tracing::error!("cannot commit newly decided block: {:?}", err)
                         }
-                        log::debug!(
+                        tracing::debug!(
                             "{log_key} COMMITTED the newly decided block within {:?}",
                             consensus_start_time.elapsed()
                         );
@@ -216,7 +216,7 @@ async fn network_task_inner(storage: Storage, cfg: StakerConfig) -> anyhow::Resu
                     }
                     let random_neigh = swarm.routes().await.first().cloned();
                     if let Some(neigh) = random_neigh {
-                        log::trace!("syncing with {} for consensus proof", neigh);
+                        tracing::trace!("syncing with {} for consensus proof", neigh);
                         let fallible = async {
                             let connection = swarm
                                 .connect(neigh.clone())
@@ -231,13 +231,13 @@ async fn network_task_inner(storage: Storage, cfg: StakerConfig) -> anyhow::Resu
                             anyhow::Ok(result)
                         };
                         match fallible.await {
-                            Err(err) => log::warn!("cannot sync with {neigh}: {:?}", err),
+                            Err(err) => tracing::warn!("cannot sync with {neigh}: {:?}", err),
                             Ok(map) => {
                                 let mut existing = sig_gather.entry(next_height).or_default();
                                 for (k, v) in map {
                                     existing.insert(k, v);
                                 }
-                                log::debug!(
+                                tracing::debug!(
                                     "{log_key}  now have {} votes in consensus proof after talking to {neigh}",
                                     existing.len()
                                 );
@@ -282,7 +282,7 @@ impl DeciderConfig for StakerInner {
         let main_loop = async {
             loop {
                 let routes = self.swarm.routes().await;
-                log::trace!("syncing core with {:?}", routes);
+                tracing::trace!("syncing core with {:?}", routes);
                 for route in routes {
                     let our_summary = core.read().summary();
                     let fallible = async {
@@ -304,12 +304,16 @@ impl DeciderConfig for StakerInner {
                             // apply the diffs
                             for diff in diff {
                                 if let Err(err) = core.write().apply_one_diff(diff.clone()) {
-                                    log::warn!("invalid diff from {route} ({:?}): {:?}", err, diff);
+                                    tracing::warn!(
+                                        "invalid diff from {route} ({:?}): {:?}",
+                                        err,
+                                        diff
+                                    );
                                 }
                             }
                         }
                         Err(err) => {
-                            log::trace!("could not sync with {route}: {:?}", err)
+                            tracing::trace!("could not sync with {route}: {:?}", err)
                         }
                     }
                 }

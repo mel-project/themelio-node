@@ -1,4 +1,4 @@
-use crate::storage::Storage;
+use crate::{storage::Storage, telemetry};
 use anyhow::Context;
 use base64::Engine;
 use futures_util::stream::{StreamExt, TryStreamExt};
@@ -41,14 +41,17 @@ pub async fn attempt_blksync(
     while height <= their_highest {
         let start = Instant::now();
 
-        tracing::debug!("gonna get compressed blocks from {addr}...");
+        let now = Instant::now();
         let compressed_blocks = client
             .get_lz4_blocks(height, 500_000)
             .timeout(Duration::from_secs(30))
             .await
             .context("timeout while getting compressed blocks")?
             .context("failed to get compressed blocks")?;
-        tracing::debug!("got compressed blocks!");
+        tracing::trace!(
+            time = debug(now.elapsed()),
+            "getting compressed blocks from {addr} time taken"
+        );
 
         let (blocks, cproofs): (Vec<Block>, Vec<ConsensusProof>) = match compressed_blocks {
             Some(compressed) => {
@@ -65,13 +68,19 @@ pub async fn attempt_blksync(
         };
 
         let mut last_applied_height = height;
-        tracing::info!(
+        tracing::debug!(
             "fully resolved blocks {}..{} from peer {} in {:.2}ms",
             blocks.first().map(|b| b.header.height).unwrap_or_default(),
             blocks.last().map(|b| b.header.height).unwrap_or_default(),
             addr,
             start.elapsed().as_secs_f64() * 1000.0
         );
+
+        telemetry::emit_metric(
+            "blksync_single_loop_ms",
+            start.elapsed().as_secs_f64() * 1000.0,
+        );
+
         for (block, cproof) in blocks.iter().zip(cproofs) {
             // validate before applying
             if block.header.height != last_applied_height {
