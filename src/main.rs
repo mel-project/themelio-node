@@ -1,10 +1,11 @@
-use melnode::{args::MainArgs, node::Node, staker::Staker, storage::Storage};
+use melnode::{args::MainArgs, dump_balances, node::Node, staker::Staker};
 
 use anyhow::Context;
 
 use clap::Parser;
 use melnet2::{wire::http::HttpBackhaul, Swarm};
 use melprot::{Client, CoinChange, NodeRpcClient};
+use melstf::CoinMapping;
 use melstructs::{BlockHeight, CoinID};
 
 #[cfg(feature = "dhat-heap")]
@@ -35,7 +36,7 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
 
     let genesis = opt.genesis_config().await?;
     let netid = genesis.network;
-    let storage: Storage = opt.storage().await?;
+    let storage = opt.storage().await?;
     let bootstrap = opt.bootstrap().await?;
 
     log::info!("bootstrapping with {:?}", bootstrap);
@@ -129,6 +130,25 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
             }
         })
         .detach();
+    }
+
+    if let Some(path) = &opt.dump_balances {
+        let storage = storage.clone();
+        let rpc_client = swarm
+            .connect(opt.listen_addr().to_string().into())
+            .await
+            .unwrap();
+        let client = Client::new(netid, rpc_client);
+        let snapshot = client.latest_snapshot().await.unwrap();
+        let header = snapshot.current_header();
+        let height = header.height;
+        let coins_hash = header.coins_hash;
+        let state = storage.get_state(height).await.context("error retrieving state")?;
+        let raw_coins_smt = state.raw_coins_smt();
+        let coins_smt = raw_coins_smt.database().get_tree(coins_hash.0).unwrap();
+        let coins = CoinMapping::new(coins_smt);
+
+        dump_balances::dump_balances(&coins, path)?;
     }
 
     // #[cfg(feature = "dhat-heap")]

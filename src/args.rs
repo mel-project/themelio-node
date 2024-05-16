@@ -54,6 +54,10 @@ pub struct MainArgs {
     /// Create an in-memory coin index. **RPC endpoints that rely on this will be disabled if this is not set!**
     #[arg(long)]
     pub index_coins: bool,
+
+    /// Aggregate total MEL, SYM, and ERG balances for all addresses and dump to a file
+    #[arg(long)]
+    pub dump_balances: Option<PathBuf>,
 }
 
 /// Staker configuration, YAML-deserializable.

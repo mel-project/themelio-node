@@ -140,7 +140,7 @@ impl NodeRpcImpl {
         })
     }
 
-    async fn get_coin_tree(&self, height: BlockHeight) -> anyhow::Result<Tree<InMemoryCas>> {
+    async fn get_tx_tree(&self, height: BlockHeight) -> anyhow::Result<Tree<InMemoryCas>> {
         let otree = self.coin_smts.lock().get(&height).cloned();
         if let Some(v) = otree {
             Ok(v)
@@ -323,7 +323,7 @@ impl NodeRpcProtocol for NodeRpcImpl {
     ) -> Option<(Vec<u8>, CompressedProof)> {
         log::trace!("handling get_smt_branch({}, {:?})", height, elem);
         let state = self.storage.get_state(height).await?;
-        let ctree = self.get_coin_tree(height).await.ok()?;
+        let tx_tree = self.get_tx_tree(height).await.ok()?;
         let coins_smt = state.raw_coins_smt();
         let history_smt = state.raw_history_smt();
         let pools_smt = state.raw_pools_smt();
@@ -333,7 +333,7 @@ impl NodeRpcProtocol for NodeRpcImpl {
             Substate::History => history_smt.get_with_proof(key.0),
             Substate::Pools => pools_smt.get_with_proof(key.0),
             Substate::Stakes => todo!("no longer relevant"),
-            Substate::Transactions => ctree.get_with_proof(key.0),
+            Substate::Transactions => tx_tree.get_with_proof(key.0),
         };
         Some((v.to_vec(), proof.compress()))
     }

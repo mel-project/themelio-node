@@ -2129,6 +2129,7 @@ dependencies = [
  "parking_lot 0.12.2",
  "prometheus",
  "public-ip",
+ "rand",
  "reqwest",
  "rusqlite",
  "scopeguard",
