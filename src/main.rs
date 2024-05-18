@@ -139,6 +139,7 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
             .await
             .unwrap();
         let client = Client::new(netid, rpc_client);
+        client.dangerously_trust_latest().await?;
         let snapshot = client.latest_snapshot().await.unwrap();
         let header = snapshot.current_header();
         let height = header.height;
