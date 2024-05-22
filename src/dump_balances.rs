@@ -21,7 +21,7 @@ fn tally_balances<C: ContentAddrStore>(
 ) -> HashMap<Address, HashMap<Denom, CoinValue>> {
     let mut balances: HashMap<Address, HashMap<Denom, CoinValue>> = HashMap::new();
 
-    for (_, v) in coins.inner().iter() {
+    for (_, v) in coins.iter() {
         let cdh: CoinDataHeight = match stdcode::deserialize(&v) {
             Ok(cdh) => cdh,
             Err(_) => continue,

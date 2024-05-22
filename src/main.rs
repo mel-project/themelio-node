@@ -69,12 +69,11 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
 
         let rpc_client = swarm
             .connect(opt.listen_addr().to_string().into())
-            .await
-            .unwrap();
+            .await?;
         let client = Client::new(netid, rpc_client);
 
-        client.dangerously_trust_latest().await.unwrap();
-        let snapshot = client.latest_snapshot().await.unwrap();
+        client.dangerously_trust_latest().await?;
+        let snapshot = client.latest_snapshot().await?;
         smolscale::spawn::<anyhow::Result<()>>(async move {
             loop {
                 log::info!("*** SELF TEST STARTED! ***");
@@ -103,8 +102,7 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
                             let coin_changes = snapshot
                                 .get_raw()
                                 .get_coin_changes(bh, recipient)
-                                .await
-                                .unwrap()
+                                .await?
                                 .unwrap();
 
                             log::debug!("testing transaction recipient {recipient}");
@@ -117,8 +115,7 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
                             let coin_changes = snapshot
                                 .get_raw()
                                 .get_coin_changes(bh, reward_dest)
-                                .await
-                                .unwrap()
+                                .await?
                                 .unwrap();
 
                             log::debug!("testing proposer {reward_dest}");
@@ -136,11 +133,10 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
         let storage = storage.clone();
         let rpc_client = swarm
             .connect(opt.listen_addr().to_string().into())
-            .await
-            .unwrap();
+            .await?;
         let client = Client::new(netid, rpc_client);
         client.dangerously_trust_latest().await?;
-        let snapshot = client.latest_snapshot().await.unwrap();
+        let snapshot = client.latest_snapshot().await?;
         let header = snapshot.current_header();
         let height = header.height;
         let coins_hash = header.coins_hash;
