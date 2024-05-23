@@ -1,11 +1,11 @@
 use std::{collections::HashMap, fs::File, path::PathBuf};
 
 use melstf::CoinMapping;
-use melstructs::{
-    Address, CoinDataHeight, CoinValue, Denom,
-};
+use melstructs::{Address, CoinDataHeight, CoinValue, Denom};
 use novasmt::ContentAddrStore;
 use serde_json::to_writer_pretty;
+
+pub const DUMP_PATH: &str = "balances.json";
 
 pub fn dump_balances<C: ContentAddrStore>(
     coins: &CoinMapping<C>,
@@ -84,7 +84,7 @@ mod tests {
 
     fn add_random_coin<C: ContentAddrStore>(coins: &mut CoinMapping<C>) {
         let (id, cdh) = random_coin();
-        coins.insert_coin(id, cdh, true);
+        coins.insert_coin(id, cdh, rand::thread_rng().gen());
     }
 
     fn random_coin() -> (CoinID, CoinDataHeight) {

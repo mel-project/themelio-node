@@ -57,7 +57,7 @@ pub struct MainArgs {
 
     /// Aggregate total MEL, SYM, and ERG balances for all addresses and dump to a file
     #[arg(long)]
-    pub dump_balances: Option<PathBuf>,
+    pub dump_balances: bool,
 }
 
 /// Staker configuration, YAML-deserializable.

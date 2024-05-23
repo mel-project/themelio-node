@@ -5,6 +5,7 @@ use smol::channel::{Receiver, Sender};
 use std::{
     ops::{Deref, DerefMut},
     path::PathBuf,
+    str::FromStr,
     sync::Arc,
     time::Instant,
 };
@@ -19,7 +20,7 @@ use parking_lot::RwLock;
 use melstf::{GenesisConfig, SealedState};
 use melstructs::{Block, BlockHeight, CoinValue, ConsensusProof, NetID, StakeDoc, TxHash, TxKind};
 
-use crate::autoretry::autoretry;
+use crate::{autoretry::autoretry, dump_balances::DUMP_PATH, import_balances};
 
 use super::{mempool::Mempool, MeshaCas};
 
@@ -67,6 +68,8 @@ impl Storage {
         std::fs::create_dir_all(&db_folder).context("cannot make folder")?;
         let sqlite_path = db_folder.clone().tap_mut(|path| path.push("storage.db"));
         let mesha_path = db_folder.clone().tap_mut(|path| path.push("merkle.db"));
+        let block_1 = import_balances::block_1(PathBuf::from_str(DUMP_PATH)?)?;
+
         log::debug!("about to sqlite");
         let conn = rusqlite::Connection::open(&sqlite_path).context("cannot make sqlite")?;
         conn.execute("create table if not exists history (height primary key not null, header not null, block not null)", params![])?;
@@ -79,8 +82,17 @@ impl Storage {
             "create table if not exists misc (key primary key not null, value not null)",
             params![],
         )?;
-
         log::debug!("sqlite initted");
+
+        conn.execute(
+            "insert into history (height, header, block) values ($1, $2, $3)",
+            params![
+                block_1.header.height.0,
+                block_1.header.stdcode(),
+                block_1.stdcode()
+            ],
+        )?;
+        log::debug!("initial balances applied to block 1");
 
         // initialize the stakes
         for (txhash, stake) in genesis.stakes.iter() {
@@ -261,9 +273,6 @@ impl Storage {
     /// Consumes a block, applying it to the current state.
     pub async fn apply_block(&self, blk: Block, cproof: ConsensusProof) -> anyhow::Result<()> {
         let _guard = self.lock.lock().await;
-        if blk.header.height.0 == 531 {
-            eprintln!("APPLY BLOCK: {:#?}", blk);
-        }
         let highest_state = self.highest_state().await;
         let header = blk.header;
         if header.height != highest_state.header().height + 1.into() {

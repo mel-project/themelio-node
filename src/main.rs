@@ -1,4 +1,6 @@
-use melnode::{args::MainArgs, dump_balances, node::Node, staker::Staker};
+use std::{path::PathBuf, str::FromStr};
+
+use melnode::{args::MainArgs, dump_balances::{self, DUMP_PATH}, node::Node, staker::Staker};
 
 use anyhow::Context;
 
@@ -67,9 +69,7 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
     if opt.self_test {
         let storage = storage.clone();
 
-        let rpc_client = swarm
-            .connect(opt.listen_addr().to_string().into())
-            .await?;
+        let rpc_client = swarm.connect(opt.listen_addr().to_string().into()).await?;
         let client = Client::new(netid, rpc_client);
 
         client.dangerously_trust_latest().await?;
@@ -129,23 +129,24 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
         .detach();
     }
 
-    if let Some(path) = &opt.dump_balances {
+    if opt.dump_balances {
         let storage = storage.clone();
-        let rpc_client = swarm
-            .connect(opt.listen_addr().to_string().into())
-            .await?;
+        let rpc_client = swarm.connect(opt.listen_addr().to_string().into()).await?;
         let client = Client::new(netid, rpc_client);
         client.dangerously_trust_latest().await?;
         let snapshot = client.latest_snapshot().await?;
         let header = snapshot.current_header();
         let height = header.height;
         let coins_hash = header.coins_hash;
-        let state = storage.get_state(height).await.context("error retrieving state")?;
+        let state = storage
+            .get_state(height)
+            .await
+            .context("error retrieving state")?;
         let raw_coins_smt = state.raw_coins_smt();
         let coins_smt = raw_coins_smt.database().get_tree(coins_hash.0).unwrap();
         let coins = CoinMapping::new(coins_smt);
 
-        dump_balances::dump_balances(&coins, path)?;
+        dump_balances::dump_balances(&coins, &PathBuf::from_str(DUMP_PATH)?)?;
     }
 
     // #[cfg(feature = "dhat-heap")]
