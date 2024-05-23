@@ -5,7 +5,6 @@ use smol::channel::{Receiver, Sender};
 use std::{
     ops::{Deref, DerefMut},
     path::PathBuf,
-    str::FromStr,
     sync::Arc,
     time::Instant,
 };
@@ -20,7 +19,7 @@ use parking_lot::RwLock;
 use melstf::{GenesisConfig, SealedState};
 use melstructs::{Block, BlockHeight, CoinValue, ConsensusProof, NetID, StakeDoc, TxHash, TxKind};
 
-use crate::{autoretry::autoretry, dump_balances::DUMP_PATH, import_balances};
+use crate::{autoretry::autoretry, import_balances};
 
 use super::{mempool::Mempool, MeshaCas};
 
