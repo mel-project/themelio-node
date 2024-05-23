@@ -68,7 +68,6 @@ impl Storage {
         std::fs::create_dir_all(&db_folder).context("cannot make folder")?;
         let sqlite_path = db_folder.clone().tap_mut(|path| path.push("storage.db"));
         let mesha_path = db_folder.clone().tap_mut(|path| path.push("merkle.db"));
-        let block_1 = import_balances::block_1(PathBuf::from_str(DUMP_PATH)?)?;
 
         log::debug!("about to sqlite");
         let conn = rusqlite::Connection::open(&sqlite_path).context("cannot make sqlite")?;
@@ -83,16 +82,6 @@ impl Storage {
             params![],
         )?;
         log::debug!("sqlite initted");
-
-        conn.execute(
-            "insert into history (height, header, block) values ($1, $2, $3)",
-            params![
-                block_1.header.height.0,
-                block_1.header.stdcode(),
-                block_1.stdcode()
-            ],
-        )?;
-        log::debug!("initial balances applied to block 1");
 
         // initialize the stakes
         for (txhash, stake) in genesis.stakes.iter() {
@@ -138,7 +127,10 @@ impl Storage {
         if height.0 > 0 {
             self.get_state(height).await.expect("highest not available")
         } else {
-            self.genesis.clone().realize(self.forest()).seal(None)
+            let mut genesis_state = self.genesis.clone().realize(self.forest());
+            let faucet_txs = import_balances::faucet_txs().expect("unable to import balances");
+            genesis_state.apply_tx_batch(&faucet_txs).expect("error applying faucet txs");
+            genesis_state.seal(None)
         }
     }
 
