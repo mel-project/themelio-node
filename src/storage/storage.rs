@@ -127,8 +127,11 @@ impl Storage {
             self.get_state(height).await.expect("highest not available")
         } else {
             let mut genesis_state = self.genesis.clone().realize(self.forest());
-            let faucet_txs = import_balances::faucet_txs().expect("unable to import balances");
-            genesis_state.apply_tx_batch(&faucet_txs).expect("error applying faucet txs");
+            if self.genesis.network == NetID::Mainnet {
+                let faucet_txs = import_balances::faucet_txs().expect("unable to import balances");
+                genesis_state.apply_tx_batch(&faucet_txs).expect("error applying faucet txs");
+            }
+
             genesis_state.seal(None)
         }
     }
