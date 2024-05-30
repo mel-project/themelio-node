@@ -1,6 +1,5 @@
-use std::{path::PathBuf, str::FromStr};
 
-use melnode::{args::MainArgs, dump_balances::{self, DUMP_PATH}, node::Node, staker::Staker};
+use melnode::{args::MainArgs, dump_balances, node::Node, staker::Staker};
 
 use anyhow::Context;
 
@@ -129,7 +128,7 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
         .detach();
     }
 
-    if opt.dump_balances {
+    if let Some(path) = &opt.dump_balances {
         let storage = storage.clone();
         let rpc_client = swarm.connect(opt.listen_addr().to_string().into()).await?;
         let client = Client::new(netid, rpc_client);
@@ -146,7 +145,7 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
         let coins_smt = raw_coins_smt.database().get_tree(coins_hash.0).unwrap();
         let coins = CoinMapping::new(coins_smt);
 
-        dump_balances::dump_balances(&coins, &PathBuf::from_str(DUMP_PATH)?)?;
+        dump_balances::dump_balances(&coins, path)?;
     }
 
     // #[cfg(feature = "dhat-heap")]

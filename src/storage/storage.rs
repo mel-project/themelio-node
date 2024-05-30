@@ -19,7 +19,7 @@ use parking_lot::RwLock;
 use melstf::{GenesisConfig, SealedState};
 use melstructs::{Block, BlockHeight, CoinValue, ConsensusProof, NetID, StakeDoc, TxHash, TxKind};
 
-use crate::{autoretry::autoretry, import_balances};
+use crate::autoretry::autoretry;
 
 use super::{mempool::Mempool, MeshaCas};
 
@@ -126,13 +126,7 @@ impl Storage {
         if height.0 > 0 {
             self.get_state(height).await.expect("highest not available")
         } else {
-            let mut genesis_state = self.genesis.clone().realize(self.forest());
-            if self.genesis.network == NetID::Mainnet {
-                let faucet_txs = import_balances::faucet_txs().expect("unable to import balances");
-                genesis_state.apply_tx_batch(&faucet_txs).expect("error applying faucet txs");
-            }
-
-            genesis_state.seal(None)
+            self.genesis.clone().realize(self.forest()).seal(None)
         }
     }
 
@@ -349,6 +343,7 @@ impl Storage {
             apply_time.as_secs_f64() * 1000.0,
             start.elapsed().as_secs_f64() * 1000.0
         );
+
         let next = self.highest_state().await;
         self.mempool_mut().rebase(next);
         self.new_block_notify.notify(usize::MAX);

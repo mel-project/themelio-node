@@ -2230,6 +2230,7 @@ dependencies = [
  "rustc-hash",
  "scopeguard",
  "serde",
+ "serde_json",
  "serde_repr",
  "serde_with",
  "serde_yaml 0.9.34+deprecated",

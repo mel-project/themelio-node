@@ -2,6 +2,7 @@ use clap::{Args, Parser, Subcommand};
 use melnode::args::StakerConfig;
 use std::fmt::Write;
 use std::net::{Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
 
 use melstf::GenesisConfig;
 use melstructs::{Address, CoinData, CoinValue, Denom, NetID, StakeDoc, TxHash};
@@ -59,6 +60,7 @@ fn main_create(create: CreateArgs) -> anyhow::Result<()> {
             .collect(),
         init_fee_pool: 0.into(),
         init_fee_multiplier: 100,
+        init_balances: PathBuf::from(""),
     };
     let staker_configs =
         create
