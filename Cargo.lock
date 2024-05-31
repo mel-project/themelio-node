@@ -4706,3 +4706,8 @@ name = "zeroize"
 version = "1.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "525b4ec142c6b68a2d10f01f7bbf6755599ca3f81ea53b8431b7dd348f5fdb2d"
+
+[[patch.unused]]
+name = "melbootstrap"
+version = "0.8.3"
+source = "git+https://github.com/mel-project/melbootstrap?branch=history-wipe#2d3dc53956bde5a8ad964cccf4c2d3280b114ae3"

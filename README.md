@@ -57,7 +57,7 @@ $ melnode
 To run the replica on the non-persistent testnet, where most covenant development and testing will happen during the betanet period, run instead
 
 ```
-$ melnode --bootstrap tm-1.themelio.org:11814 --testnet
+$ melnode --bootstrap tm-1.themelio.org:41814 --testnet
 ```
 
 Note that two things were needed to connect to the testnet:
@@ -71,7 +71,7 @@ You can change the configuration of an replica node with the following flags:
 
 ```
 --bootstrap <bootstrap>...
-            Bootstrap addresses. May be given as a DNS name [default: mainnet-bootstrap.themelio.org:11814]
+            Bootstrap addresses. May be given as a DNS name [default: mainnet-bootstrap.themelio.org:41814]
 
 --database <database>                        Database path [default: /tmp/themelio-mainnet]
 
@@ -90,7 +90,7 @@ You can change the configuration of an replica node with the following flags:
 
 We can configure a simnet --- a "fake" network local to our computer --- by the combination of three options:
 
-- `--bootstrap 127.0.0.1:11814` to bootstrap only with ourselves instead of any remote node
+- `--bootstrap 127.0.0.1:41814` to bootstrap only with ourselves instead of any remote node
 - `--override-genesis network-config.yaml`, where `custom-config.yaml` contains configuration for a _custom network_ of the following form:
 
   ```yaml

@@ -23,6 +23,7 @@ debug = 0
 [patch.crates-io]
 melstf={path="../melstf"}
 tip911-stakeset={path="../melstf/lib/tip911-stakeset"}
+melbootstrap = { git = "https://github.com/mel-project/melbootstrap", branch = "history-wipe" }
 # # melnet={path="../melnet"}  
 # melprot={path="../melprot"} 
 
