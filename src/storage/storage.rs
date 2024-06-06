@@ -103,7 +103,7 @@ impl Storage {
             meshanina::Mapping::open(&mesha_path).context("cannot open mesha")?,
         ));
         let mempool = Arc::new(Mempool::new(genesis.clone().realize(&forest)).into());
-        Ok(Self {
+        let storage = Self {
             send_pool,
             recv_pool,
             old_cache: Arc::new(Cache::new(100)),
@@ -113,10 +113,20 @@ impl Storage {
 
             new_block_notify: Arc::new(Event::new()),
             mempool,
-            sqlite_path,
+            sqlite_path: sqlite_path.clone(),
 
             lock: Default::default(),
-        })
+        };
+        let highest_block = storage.highest_state().await.to_block();
+        if highest_block.header.height.0 == 0 {
+            let conn = rusqlite::Connection::open(&sqlite_path)?;
+            conn.execute(
+                "insert into history (height, header, block) values ($1, $2, $3)",
+                params![highest_block.header.height.0, highest_block.header.stdcode(), highest_block.stdcode()],
+            )?;
+        }
+
+        Ok(storage)
     }
 
     /// Obtain the highest state.
