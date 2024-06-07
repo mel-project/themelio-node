@@ -1998,6 +1998,7 @@ checksum = "2532096657941c2fea9c289d370a250971c689d4f143798ff67113ec042024a5"
 [[package]]
 name = "melblkidx"
 version = "0.7.4"
+source = "git+https://github.com/mel-project/melblkidx#73393424cfa756f16f001ea4b6d56859c9e71dbb"
 dependencies = [
  "anyhow",
  "concurrent-queue 1.2.4",
