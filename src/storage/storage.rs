@@ -3,10 +3,7 @@ use event_listener::Event;
 use rusqlite::{params, OptionalExtension};
 use smol::channel::{Receiver, Sender};
 use std::{
-    ops::{Deref, DerefMut},
-    path::PathBuf,
-    sync::Arc,
-    time::Instant,
+    collections::BTreeMap, ops::{Deref, DerefMut}, path::PathBuf, sync::Arc, time::Instant
 };
 use stdcode::StdcodeSerializeExt;
 use tap::Tap;
@@ -120,9 +117,16 @@ impl Storage {
         let highest_block = storage.highest_state().await.to_block();
         if highest_block.header.height.0 == 0 {
             let conn = rusqlite::Connection::open(&sqlite_path)?;
+            let spoofed_proof: BTreeMap<tmelcrypt::Ed25519PK, bytes::Bytes> = BTreeMap::new();
+
             conn.execute(
                 "insert into history (height, header, block) values ($1, $2, $3)",
                 params![highest_block.header.height.0, highest_block.header.stdcode(), highest_block.stdcode()],
+            )?;
+
+            conn.execute(
+                "insert into consensus_proofs (height, proof) values ($1, $2)",
+                params![highest_block.header.height.0, stdcode::serialize(&spoofed_proof).unwrap()],
             )?;
         }
 
