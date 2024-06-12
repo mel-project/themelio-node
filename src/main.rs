@@ -53,7 +53,7 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
     let _node_prot = Node::start(
         netid,
         opt.listen_addr(),
-        opt.advertise_addr(),
+        opt.advertise_addrs(),
         storage.clone(),
         opt.index_coins,
         swarm.clone(),
