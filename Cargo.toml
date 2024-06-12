@@ -24,8 +24,8 @@ debug = 0
 melstf={path="../melstf"}
 tip911-stakeset={path="../melstf/lib/tip911-stakeset"}
 melbootstrap = { git = "https://github.com/mel-project/melbootstrap", branch = "history-wipe" }
-# # melnet={path="../melnet"}  
 melprot = { git = "https://github.com/mel-project/melprot" } 
+melnet2 = { git = "https://github.com/mel-project/melnet2", branch = "socks5" }
 
 [profile.release-dbg]
 inherits = "release"
@@ -125,7 +125,7 @@ clap = { version = "4.1.14", features = ["derive", "cargo", "unicode"] }
 melbootstrap = "0.8.3"
 melstructs = "0.3.2"
 melblkidx = { git = "https://github.com/mel-project/melblkidx" }
-melstf = "0.12.3"
+melstf = { path = "../melstf" } # "0.12.3"
 tip911-stakeset = "0.0.2"
 melvm = "0.1.0"
 melprot = "0.13.4"

@@ -25,7 +25,7 @@ pub struct MainArgs {
 
     /// Advertise address. Put your public IP address here.
     #[arg(long)]
-    advertise: Option<SocketAddr>,
+    advertise: Vec<String>,
 
     /// Override bootstrap addresses. May be given as a DNS name.
     #[arg(long, default_value = "auto")]
@@ -81,8 +81,8 @@ pub struct StakerConfig {
 
 impl MainArgs {
     /// Gets the advertised IP.
-    pub fn advertise_addr(&self) -> Option<SocketAddr> {
-        self.advertise
+    pub fn advertise_addrs(&self) -> Vec<String> {
+        self.advertise.clone()
     }
 
     /// Derives the genesis configuration from the arguments

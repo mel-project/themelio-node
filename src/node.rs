@@ -44,19 +44,29 @@ impl Node {
     pub async fn start(
         netid: NetID,
         listen_addr: SocketAddr,
-
-        advertise_addr: Option<SocketAddr>,
+        advertise_addrs: Vec<String>,
         storage: Storage,
         index_coins: bool,
         swarm: Swarm<HttpBackhaul, NodeRpcClient>,
     ) -> anyhow::Result<Self> {
-        // This is all we need to do since start_listen does not block.
-        log::debug!("starting to listen at {}", listen_addr);
-        swarm
-            .start_listen(
-                listen_addr.to_string().into(),
-                advertise_addr.map(|addr| addr.to_string().into()),
-                NodeRpcService(
+        let listen_addr_str = listen_addr.to_string().into();
+
+        if advertise_addrs.is_empty() {
+            log::debug!("starting to listen at {}", listen_addr);
+            let service = NodeRpcService(
+                NodeRpcImpl::start(
+                    swarm.clone(),
+                    listen_addr,
+                    netid,
+                    storage.clone(),
+                    index_coins,
+                )
+                .await?,
+            );
+            swarm.start_listen(listen_addr_str, None, service).await?;
+        } else {
+            for advertise_addr in advertise_addrs {
+                let service = NodeRpcService(
                     NodeRpcImpl::start(
                         swarm.clone(),
                         listen_addr,
@@ -65,9 +75,17 @@ impl Node {
                         index_coins,
                     )
                     .await?,
-                ),
-            )
-            .await?;
+                );
+                log::debug!("starting to listen at {}", listen_addr);
+                swarm
+                    .start_listen(
+                        listen_addr_str.clone(),
+                        Some(advertise_addr.into()),
+                        service,
+                    )
+                    .await?;
+            }
+        }
 
         let _blksync_task = smolscale::spawn(blksync_loop(netid, swarm, storage));
         Ok(Self { _blksync_task })
