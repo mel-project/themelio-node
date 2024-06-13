@@ -44,29 +44,18 @@ impl Node {
     pub async fn start(
         netid: NetID,
         listen_addr: SocketAddr,
-        advertise_addrs: Vec<String>,
+        advertise_addr: Option<String>,
         storage: Storage,
         index_coins: bool,
         swarm: Swarm<HttpBackhaul, NodeRpcClient>,
     ) -> anyhow::Result<Self> {
-        let listen_addr_str = listen_addr.to_string().into();
-
-        if advertise_addrs.is_empty() {
-            log::debug!("starting to listen at {}", listen_addr);
-            let service = NodeRpcService(
-                NodeRpcImpl::start(
-                    swarm.clone(),
-                    listen_addr,
-                    netid,
-                    storage.clone(),
-                    index_coins,
-                )
-                .await?,
-            );
-            swarm.start_listen(listen_addr_str, None, service).await?;
-        } else {
-            for advertise_addr in advertise_addrs {
-                let service = NodeRpcService(
+        // This is all we need to do since start_listen does not block.
+        log::debug!("starting to listen at {}", listen_addr);
+        swarm
+            .start_listen(
+                listen_addr.to_string().into(),
+                advertise_addr.map(|addr| addr.to_string().into()),
+                NodeRpcService(
                     NodeRpcImpl::start(
                         swarm.clone(),
                         listen_addr,
@@ -75,17 +64,9 @@ impl Node {
                         index_coins,
                     )
                     .await?,
-                );
-                log::debug!("starting to listen at {}", listen_addr);
-                swarm
-                    .start_listen(
-                        listen_addr_str.clone(),
-                        Some(advertise_addr.into()),
-                        service,
-                    )
-                    .await?;
-            }
-        }
+                ),
+            )
+            .await?;
 
         let _blksync_task = smolscale::spawn(blksync_loop(netid, swarm, storage));
         Ok(Self { _blksync_task })
@@ -100,9 +81,10 @@ async fn blksync_loop(_netid: NetID, swarm: Swarm<HttpBackhaul, NodeRpcClient>, 
         if let Some(peer) = random_peer {
             log::trace!("picking peer {} out of {} peers", &peer, routes.len());
             let fallible_part = async {
+                log::info!("swarm trying connecting to {peer}...");
                 let client = swarm.connect(peer.clone()).await?;
-                let addr: SocketAddr = peer.clone().to_string().parse()?;
-                let res = attempt_blksync(addr, &client, &storage).await?;
+                log::info!("HALLELUJAH! swarm connected to {peer}!!!");
+                let res = attempt_blksync(peer.to_string(), &client, &storage).await?;
                 anyhow::Ok(res)
             };
             match fallible_part.await {

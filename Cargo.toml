@@ -1,7 +1,7 @@
 [package]
 name = "melnode"
 version = "0.20.8"
-repository ="https://github.com/mel-project/melnode"
+repository = "https://github.com/mel-project/melnode"
 license = "MPL-2.0"
 description = "Reference implementation of Mel"
 edition = "2021"
@@ -9,7 +9,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [profile.dev]
 panic = "abort"
-opt-level = 1 
+opt-level = 1
 overflow-checks = true
 
 [profile.release]
@@ -21,15 +21,15 @@ debug = 0
 # codegen-units = 1 
 
 [patch.crates-io]
-melstf={path="../melstf"}
-tip911-stakeset={path="../melstf/lib/tip911-stakeset"}
+melstf = { path = "../melstf" }
+tip911-stakeset = { path = "../melstf/lib/tip911-stakeset" }
 melbootstrap = { git = "https://github.com/mel-project/melbootstrap", branch = "history-wipe" }
-melprot = { git = "https://github.com/mel-project/melprot" } 
+melprot = { git = "https://github.com/mel-project/melprot" }
 melnet2 = { git = "https://github.com/mel-project/melnet2", branch = "socks5" }
 
 [profile.release-dbg]
 inherits = "release"
-debug = 2 
+debug = 2
 panic = "abort"
 lto = false
 codegen-units = 32
@@ -64,7 +64,7 @@ anyhow = "1.0.70"
 arc-swap = "1.6.0"
 
 dashmap = "4.0.2"
-default-net = { version = "0.6.0", optional = true } 
+default-net = { version = "0.6.0", optional = true }
 env_logger = "0.9.3"
 ethnum = "1.3.2"
 fastrand = "1.9.0"
@@ -109,6 +109,7 @@ dirs = "4.0.0"
 jemallocator-global = "0.3.2"
 melnet2 = "0.3.1"
 nanorpc = "0.1.12"
+nanorpc-http = { git = "https://github.com/antidmg/nanorpc-http", branch = "new-with-proxy" }
 moka = "0.9.7"
 event-listener = "2.5.3"
 crossbeam-queue = "0.3.8"
@@ -125,7 +126,7 @@ clap = { version = "4.1.14", features = ["derive", "cargo", "unicode"] }
 melbootstrap = "0.8.3"
 melstructs = "0.3.2"
 melblkidx = { git = "https://github.com/mel-project/melblkidx" }
-melstf = { path = "../melstf" } # "0.12.3"
+melstf = { path = "../melstf" }                                          # "0.12.3"
 tip911-stakeset = "0.0.2"
 melvm = "0.1.0"
 melprot = "0.13.4"

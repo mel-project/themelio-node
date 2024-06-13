@@ -25,7 +25,7 @@ pub struct MainArgs {
 
     /// Advertise address. Put your public IP address here.
     #[arg(long)]
-    advertise: Vec<String>,
+    advertise: Option<String>,
 
     /// Override bootstrap addresses. May be given as a DNS name.
     #[arg(long, default_value = "auto")]
@@ -58,6 +58,9 @@ pub struct MainArgs {
     /// Aggregate total MEL, SYM, and ERG balances for all addresses and dump to a file
     #[arg(long)]
     pub dump_balances: Option<PathBuf>,
+
+    #[arg(long)]
+    pub proxy: Option<SocketAddr>,
 }
 
 /// Staker configuration, YAML-deserializable.
@@ -81,7 +84,7 @@ pub struct StakerConfig {
 
 impl MainArgs {
     /// Gets the advertised IP.
-    pub fn advertise_addrs(&self) -> Vec<String> {
+    pub fn advertise_addr(&self) -> Option<String> {
         self.advertise.clone()
     }
 
@@ -125,24 +128,43 @@ impl MainArgs {
     }
 
     /// Derives a list of bootstrap addresses
-    pub async fn bootstrap(&self) -> anyhow::Result<Vec<SocketAddr>> {
+    pub async fn bootstrap(&self) -> anyhow::Result<Vec<String>> {
         if !self.bootstrap.is_empty() {
             let mut bootstrap = vec![];
             for name in self.bootstrap.iter() {
                 let addrs = if name == "auto" {
+                    // Convert Vec<SocketAddr> to Vec<String>
                     melbootstrap::bootstrap_routes(self.genesis_config().await?.network)
+                        .into_iter()
+                        .map(|addr| addr.to_string())
+                        .collect::<Vec<String>>()
                 } else {
-                    smol::net::resolve(&name)
-                        .await
-                        .context("cannot resolve DNS bootstrap")?
+                    // TODO: find a smarter way to do this
+                    if name.contains(".haven") {
+                        log::warn!("idk how to handle this haven bootstrap!");
+                        vec![name.to_string()]
+                    } else {
+                        let socket_addrs = smol::net::resolve(&name)
+                            .await
+                            .context("cannot resolve DNS bootstrap")?;
+                        socket_addrs
+                            .iter()
+                            .cloned()
+                            .map(|socket_addr| socket_addr.to_string())
+                            .collect::<Vec<String>>()
+                    }
                 };
                 bootstrap.extend(addrs);
             }
             Ok(bootstrap)
         } else {
-            Ok(melbootstrap::bootstrap_routes(
-                self.genesis_config().await?.network,
-            ))
+            // Convert Vec<SocketAddr> to Vec<String>
+            Ok(
+                melbootstrap::bootstrap_routes(self.genesis_config().await?.network)
+                    .into_iter()
+                    .map(|addr| addr.to_string())
+                    .collect::<Vec<String>>(),
+            )
         }
     }
 

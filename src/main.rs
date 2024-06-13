@@ -1,3 +1,4 @@
+use std::net::SocketAddr;
 
 use melnode::{args::MainArgs, dump_balances, node::Node, staker::Staker};
 
@@ -8,6 +9,7 @@ use melnet2::{wire::http::HttpBackhaul, Swarm};
 use melprot::{Client, CoinChange, NodeRpcClient};
 use melstf::CoinMapping;
 use melstructs::{BlockHeight, CoinID};
+use nanorpc_http::client::Proxy;
 
 #[cfg(feature = "dhat-heap")]
 #[global_allocator]
@@ -42,18 +44,27 @@ pub async fn main_async(opt: MainArgs) -> anyhow::Result<()> {
 
     log::info!("bootstrapping with {:?}", bootstrap);
 
-    let swarm: Swarm<HttpBackhaul, NodeRpcClient> =
-        Swarm::new(HttpBackhaul::new(), NodeRpcClient, "melnode");
+    let swarm: Swarm<HttpBackhaul, NodeRpcClient> = if let Some(proxy_addr) = opt.proxy {
+        log::info!("swarm with proxy: {proxy_addr}");
+        Swarm::new(
+            HttpBackhaul::new_with_proxy(Proxy::Socks5(proxy_addr)),
+            NodeRpcClient,
+            "melnode",
+        )
+    } else {
+        Swarm::new(HttpBackhaul::new(), NodeRpcClient, "melnode")
+    };
 
     // we add the bootstrap routes as "sticky" routes that never expire
     for addr in bootstrap.iter() {
+        log::info!("adding bootstrap to swarm: {addr}");
         swarm.add_route(addr.to_string().into(), true).await;
     }
 
     let _node_prot = Node::start(
         netid,
         opt.listen_addr(),
-        opt.advertise_addrs(),
+        opt.advertise_addr(),
         storage.clone(),
         opt.index_coins,
         swarm.clone(),

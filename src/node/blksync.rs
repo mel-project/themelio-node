@@ -5,14 +5,11 @@ use futures_util::stream::{StreamExt, TryStreamExt};
 use melprot::NodeRpcClient;
 use melstructs::{Block, BlockHeight, ConsensusProof};
 use smol_timeout::TimeoutExt;
-use std::{
-    net::SocketAddr,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 /// Attempts a sync using the given given node client.
 pub async fn attempt_blksync(
-    addr: SocketAddr,
+    addr: String,
     client: &NodeRpcClient,
     storage: &Storage,
 ) -> anyhow::Result<usize> {
@@ -94,7 +91,7 @@ pub async fn attempt_blksync(
 
 /// Attempts a sync using the given given node client, in a legacy fashion.
 pub async fn attempt_blksync_legacy(
-    addr: SocketAddr,
+    addr: String,
     client: &NodeRpcClient,
     storage: &Storage,
 ) -> anyhow::Result<usize> {
@@ -118,36 +115,41 @@ pub async fn attempt_blksync_legacy(
                 .unwrap_or(1000),
         );
     let lookup_tx = |tx| storage.mempool().lookup_recent_tx(tx);
+
     let mut result_stream = height_stream
         .map(Ok::<_, anyhow::Error>)
-        .try_filter_map(|height| async move {
-            Ok(Some(async move {
-                let start = Instant::now();
+        .try_filter_map(|height| {
+            let addr = addr.clone();
+            async move {
+                Ok(Some(async move {
+                    let start = Instant::now();
 
-                let (block, cproof): (Block, ConsensusProof) = match client
-                    .get_full_block(height, &lookup_tx)
-                    .timeout(Duration::from_secs(15))
-                    .await
-                    .context("timeout")??
-                {
-                    Some(v) => v,
-                    _ => anyhow::bail!("mysteriously missing block {}", height),
-                };
+                    let (block, cproof): (Block, ConsensusProof) = match client
+                        .get_full_block(height, &lookup_tx)
+                        .timeout(Duration::from_secs(15))
+                        .await
+                        .context("timeout")??
+                    {
+                        Some(v) => v,
+                        _ => anyhow::bail!("mysteriously missing block {}", height),
+                    };
 
-                if block.header.height != height {
-                    anyhow::bail!("WANTED BLK {}, got {}", height, block.header.height);
-                }
-                log::trace!(
-                    "fully resolved block {} from peer {} in {:.2}ms",
-                    block.header.height,
-                    addr,
-                    start.elapsed().as_secs_f64() * 1000.0
-                );
-                Ok((block, cproof))
-            }))
+                    if block.header.height != height {
+                        anyhow::bail!("WANTED BLK {}, got {}", height, block.header.height);
+                    }
+                    log::trace!(
+                        "fully resolved block {} from peer {} in {:.2}ms",
+                        block.header.height,
+                        addr,
+                        start.elapsed().as_secs_f64() * 1000.0
+                    );
+                    Ok((block, cproof))
+                }))
+            }
         })
         .try_buffered(64)
         .boxed();
+
     let mut toret = 0;
     while let Some(res) = result_stream.try_next().await? {
         let (block, proof): (Block, ConsensusProof) = res;
