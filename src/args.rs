@@ -139,20 +139,18 @@ impl MainArgs {
                         .map(|addr| addr.to_string())
                         .collect::<Vec<String>>()
                 } else {
-                    // TODO: find a smarter way to do this
-                    if name.contains(".haven") {
-                        log::warn!("idk how to handle this haven bootstrap!");
-                        vec![name.to_string()]
-                    } else {
+                    let try_resolve = async {
                         let socket_addrs = smol::net::resolve(&name)
                             .await
                             .context("cannot resolve DNS bootstrap")?;
-                        socket_addrs
+                        let addrs = socket_addrs
                             .iter()
                             .cloned()
                             .map(|socket_addr| socket_addr.to_string())
-                            .collect::<Vec<String>>()
-                    }
+                            .collect::<Vec<String>>();
+                        anyhow::Ok(addrs)
+                    };
+                    try_resolve.await.unwrap_or(vec![name.to_string()])
                 };
                 bootstrap.extend(addrs);
             }
